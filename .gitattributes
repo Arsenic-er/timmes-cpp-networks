@@ -1,0 +1,4 @@
+*.inc linguist-language=C++
+*.md text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
