@@ -4,11 +4,11 @@ This document records the verification scope of this source snapshot. It is not 
 
 ## Environment
 
-- Host: JAIST Linux server
-- Compiler: GCC 13
-- Host application: ARCH, full Debug build
-- I/O: HDF5 enabled
-- Integrated revision: [`Shiro-Akane/ARCH@68f401c`](https://github.com/Shiro-Akane/ARCH/commit/68f401cb0edf2bc0bedb3734d9d4cd569d6c56fb)
+- Host: JAIST Linux CPU/GPU server
+- Host application: ARCH with HDF5 and Helmholtz EOS
+- Integrated revision: [`Shiro-Akane/ARCH@f637597`](https://github.com/Shiro-Akane/ARCH/commit/f63759752c2d0c0d8332cd109febb88a6843b7d9)
+- Reference source: supplied Timmes `public_iso7.f90`, `public_aprox13.f90`, `public_aprox19.f90`, and `public_aprox21.f90`
+- Thermodynamic states: `T = 1e9, 2e9, 5e9 K`; `rho = 1e6, 1e8 g cm^-3`
 
 ## Species registry
 
@@ -21,42 +21,49 @@ This document records the verification scope of this source snapshot. It is not 
 
 Names and ordering were checked against the corresponding network headers.
 
-## Direct Fortran parity
+## Direct original-Fortran parity
 
-Analytic rates and RHS outputs were compared with builds of the supplied Timmes `public_*.f90` sources. The tested configuration used full screening with weak rates disabled.
+The comparison includes the species RHS, complete analytic Jacobian (including the Timmes temperature row and column), backward-Euler `LHS = I - dt * J`, nuclear-energy derivatives, and Helmholtz `cv`.
 
-| Network | Maximum relative difference |
-| --- | ---: |
-| `iso7` | `3.342993e-16` |
-| `aprox13` | `5.266553e-13` |
-| `aprox19` | `1.033907e-13` |
-| `aprox21` | `2.516835e-13` |
-| **Overall** | **`5.266553e-13`** |
+| Network | RHS relative error | Jacobian relative error | LHS relative error | Helmholtz cv relative error |
+| --- | ---: | ---: | ---: | ---: |
+| `iso7` | `2.383748949565e-15` | `2.940236373588e-15` | `2.856278354823e-15` | `5.705278821529e-16` |
+| `aprox13` | `3.596869184109e-14` | `2.850246815720e-13` | `2.850309327978e-13` | `1.331631293002e-15` |
+| `aprox19` | `9.991734850962e-15` | `5.467476955907e-15` | `5.492012250384e-15` | `3.753488177566e-16` |
+| `aprox21` | `3.997143540823e-14` | `1.092264838562e-14` | `1.091781737534e-14` | `3.947012873172e-16` |
 
-## Jacobian check
+All reported quantities are below the required `1e-12` threshold. The largest value is the `aprox13` LHS difference, `2.850309327978e-13`.
 
-Forward-mode automatic-differentiation Jacobians were compared with numerical finite differences.
+## Temperature derivative convention
 
-| Network | Maximum relative disagreement |
-| --- | ---: |
-| `iso7` | `1.558187e-6` |
-| `aprox13` | `8.517464e-7` |
-| `aprox19` | `4.329912e-6` |
-| `aprox21` | `1.928217e-6` |
+The ODE uses the original Timmes self-heating convention:
 
-Finite-difference truncation and cancellation make this a different error metric from direct Fortran parity. The values above therefore do not replace or weaken the `1e-12` physics-parity check.
+```text
+dT/dt = enuc / cv
+J(T,j) = (d enuc / dX_j) / cv
+J(T,T) = (d enuc / dT) / cv
+```
 
-## CellularDet smoke test
+The species temperature column and nuclear-energy temperature row use analytic reaction-rate derivatives; no temperature finite difference is used. Matching the original Timmes Jacobian, the implementation does not add quotient-rule derivatives of `cv` to the ODE Jacobian.
 
-A one-step CellularDet run used Helmholtz EOS, `BE_NR`, DenseLU, RK3, HLLC and PPM. Both tested larger networks completed and produced HDF5 output:
+## OpenMP determinism
 
-- `aprox19`: `Species Count: 19`
-- `aprox21`: `Species Count: 21`
+A 64 x 16 `aprox13` case ran for three burning steps with NSE bypass disabled and a `3e9 K` hot state. One-thread and sixteen-thread output had the same 20 HDF5 datasets and was bitwise identical at steps 0, 1, 2 and 3. Newly produced Ne20 confirmed execution of the network, ODE and DenseLU burn path.
 
-## Exclusions
+Parallel execution is across independent cells with dynamic OpenMP scheduling. Network, Jacobian, ODE and small dense-LU loops use SIMD where appropriate; the implementation does not create nested thread teams for an individual 8--22 equation matrix.
+
+## MPI and CUDA scope
+
+- The network functions use process-local inputs and stack-local work arrays, so they can be called inside an MPI-decomposed host application. MPI communication and domain decomposition are not implemented by this module.
+- The device-qualified and cross-architecture validated CUDA network is currently `aprox13`.
+- For translated `aprox13`, CPU-vs-CUDA comparisons over the same six states produced RHS `5.207022670405e-13`, Jacobian `5.094162745733e-13`, LHS `5.094258977149e-13`, and Helmholtz `cv` `7.834375032555e-15`.
+- CUDA verification of `iso7`, `aprox19`, and `aprox21` is not claimed in this snapshot.
+
+## Exclusions and physical scope
 
 - Weak-rate hooks `irpen`, `irnep`, and `irn56ec`
 - `sneut5` neutrino losses
 - Tabulated reaction-rate mode
+- A resolved, converged cellular-detonation solution
 
-These exclusions are documented in all three project home pages and must be revisited before results depending on those paths are treated as validated.
+The first three exclusions match the documented analytic-rate validation scope. Local RHS/Jacobian/LHS parity does not by itself validate a long-time multidimensional detonation; ZND/CJ initialization or adequate mesh/AMR convergence remains necessary.

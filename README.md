@@ -8,6 +8,8 @@
 
 Validated C++20 ports of the classic Timmes hardwired nuclear reaction networks for stellar hydrodynamics. This repository contains the repaired network module used by ARCH, with fixed species registration and no runtime dependency on `pynucastro`.
 
+The aprox-series nuclear-physics implementation is self-contained and does not require an external network-generation or runtime library. It is suitable for OpenMP and process-local MPI integration; the CUDA device path is currently verified for `aprox13`, while all four networks are verified on CPU/OpenMP.
+
 > **Status:** private research snapshot. No open-source license is granted by this repository at this time; see [NOTICE.md](NOTICE.md).
 
 ## Included networks
@@ -19,7 +21,7 @@ Validated C++20 ports of the classic Timmes hardwired nuclear reaction networks 
 | `aprox19` | 19 | H-1, He-3, the alpha chain, N-14, Fe-54, neutron and proton |
 | `aprox21` | 21 | `aprox19` plus Cr-56 and Fe-56 |
 
-The implementation includes analytic reaction-rate expressions, Timmes screening, nuclear masses and binding energies, RHS assembly, and a forward-mode automatic-differentiation Jacobian. Each `.inc` file is C++ included by its matching network header; it is not an external binary or generated runtime dependency.
+The implementation includes analytic reaction-rate expressions, Timmes screening, nuclear masses and binding energies, RHS assembly, frozen-screening composition Jacobians, and the exact analytic Timmes temperature row and column. Each `.inc` file is C++ included by its matching network header; it is not an external binary or generated runtime dependency.
 
 ## Repository layout
 
@@ -32,20 +34,24 @@ src/physics/network/
 └── aprox21/         21-species network
 ```
 
-This is an **ARCH integration module**, not a general standalone burn solver. `TimmesNetworkSupport.h` intentionally uses ARCH's runtime parameters, species manager, and dense/sparse matrix wrappers. To reproduce the validated integration, place this tree at `src/physics/network/` in ARCH and wire the selected `Net*.h/.cpp` files into ARCH's network dispatch and CMake source list. The exact integrated revision is linked under [Provenance](#provenance-and-citation).
+The detailed implementation and maintenance notes are in [`src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md`](src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md).
+
+This is an **ARCH integration module**, not a general standalone burn solver. The nuclear-rate and RHS formulas have no external network-library dependency, while `TimmesNetworkSupport.h` intentionally uses ARCH's runtime parameters, species manager, and dense/sparse matrix wrappers. To reproduce the validated integration, place this tree at `src/physics/network/` in ARCH and wire the selected `Net*.h/.cpp` files into ARCH's network dispatch and CMake source list. The exact integrated revision is linked under [Provenance](#provenance-and-citation).
 
 ## Validation
 
 The source snapshot was validated on JAIST with GCC 13 in a full Debug ARCH build with HDF5 enabled.
 
-| Network | Registered species | Maximum relative difference from original Fortran |
-| --- | ---: | ---: |
-| `iso7` | 7 | `3.342993e-16` |
-| `aprox13` | 13 | `5.266553e-13` |
-| `aprox19` | 19 | `1.033907e-13` |
-| `aprox21` | 21 | `2.516835e-13` |
+| Network | Species | RHS relative error | Jacobian relative error | LHS relative error |
+| --- | ---: | ---: | ---: | ---: |
+| `iso7` | 7 | `2.383749e-15` | `2.940236e-15` | `2.856278e-15` |
+| `aprox13` | 13 | `3.596869e-14` | `2.850247e-13` | `2.850309e-13` |
+| `aprox19` | 19 | `9.991735e-15` | `5.467477e-15` | `5.492012e-15` |
+| `aprox21` | 21 | `3.997144e-14` | `1.092265e-14` | `1.091782e-14` |
 
-The overall maximum Fortran-parity difference was `5.266553e-13`, below the requested `1e-12` threshold for the tested analytic-rate configurations. Automatic-differentiation Jacobians were also checked against finite differences; maximum relative disagreements were `1.558187e-6`, `8.517464e-7`, `4.329912e-6`, and `1.928217e-6` for `iso7`, `aprox13`, `aprox19`, and `aprox21`, respectively. These finite-difference comparisons are recorded separately from the direct physics parity result.
+All direct RHS, full Jacobian and backward-Euler LHS comparisons are below the requested `1e-12` threshold. The largest value is the `aprox13` LHS error, `2.850309e-13`.
+
+A three-step burning run with NSE bypass disabled was also compared at 1 and 16 OpenMP threads. All 20 HDF5 datasets were bitwise identical at output steps 0--3, and newly produced Ne20 confirmed that the network/ODE/LU path was exercised.
 
 CellularDet one-step smoke runs with Helmholtz EOS, `BE_NR`, DenseLU, RK3, HLLC and PPM completed for both larger networks and reported the correct values:
 
@@ -60,13 +66,15 @@ More detail is available in [docs/VALIDATION.md](docs/VALIDATION.md).
 - Weak-rate hooks `irpen`, `irnep`, and `irn56ec` remain zero stubs because the current ARCH interface does not provide the electron degeneracy input required by the original routines.
 - Timmes `sneut5` neutrino-loss physics is not included in this snapshot.
 - The original tabulated-rate mode is not included; this port uses the analytic-rate path.
-- This repository preserves only the repaired network module. Build-system and dispatch changes remain in the linked ARCH integration revision.
+- OpenMP and MPI use the same process-local, re-entrant network functions. MPI domain decomposition remains the host application's responsibility.
+- CUDA device qualification and cross-architecture validation currently cover `aprox13`; `iso7`, `aprox19`, and `aprox21` are not yet claimed as device-verified CUDA networks.
+- This repository preserves the repaired network module. Build-system, OpenMP scheduling, ODE, EOS and dispatch changes remain in the linked ARCH integration revision.
 
 ## Provenance and citation
 
 The rate and RHS expressions were translated directly from the supplied `public_iso7.f90`, `public_aprox13.f90`, `public_aprox19.f90`, and `public_aprox21.f90` sources by F. X. Timmes. The official source page is [Cococubed: Nuclear Reaction Networks](https://cococubed.com/code_pages/burn.shtml). These equations are not generated from `pynucastro`.
 
-The C++ host interfaces were developed for [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH). The validated integrated source is ARCH commit [`68f401c`](https://github.com/Shiro-Akane/ARCH/commit/68f401cb0edf2bc0bedb3734d9d4cd569d6c56fb).
+The C++ host interfaces were developed for [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH). The validated integrated source is ARCH commit [`f637597`](https://github.com/Shiro-Akane/ARCH/commit/f63759752c2d0c0d8332cd109febb88a6843b7d9).
 
 When using the network method scientifically, cite:
 
