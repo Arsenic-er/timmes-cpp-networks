@@ -12,6 +12,8 @@ aprox 系列の核物理実装は自己完結しており、外部のネット�
 
 > **状態：** 非公開の研究用スナップショットです。現時点では本リポジトリからオープンソースライセンスを付与していません。詳細は [NOTICE.md](NOTICE.md) を参照してください。
 
+開発：**Arsenic-er**、**Shiro-Akane**。監修：**Shiro-Akane**。
+
 ## 収録ネットワーク
 
 | ネットワーク | 核種数 | 登録される原子核・粒子 |
@@ -23,15 +25,19 @@ aprox 系列の核物理実装は自己完結しており、外部のネット�
 
 解析的反応率、Timmes の遮蔽補正、核質量と結合エネルギー、RHS の組み立て、frozen-screening 組成ヤコビアン、および元の Timmes に一致する解析的な温度行・温度列を実装しています。各 `.inc` ファイルは対応するネットワークヘッダーからインクルードされる C++ ソース断片であり、外部バイナリや実行時生成の依存物ではありません。
 
+本スナップショットには、Timmes `public_nse` から移植した汎用オンライン Saha NSE ソルバー `NSESolver<NetType>` も含まれます。核種数と核データは各ネットワークからコンパイル時に取得し、7、13、19、21、47 核種の固定配列を持ちません。
+
 ## リポジトリ構成
 
 ```text
-src/physics/network/
-├── timmes_common/   共通常数、遮蔽、反応率組み立て、自動微分
-├── iso7/            7 核種ネットワーク
-├── aprox13/         13 核種 α 鎖ネットワーク
-├── aprox19/         19 核種ネットワーク
-└── aprox21/         21 核種ネットワーク
+src/physics/
+├── network/
+│   ├── timmes_common/   共通常数、遮蔽、反応率組み立て、自動微分
+│   ├── iso7/            7 核種ネットワーク
+│   ├── aprox13/         13 核種 α 鎖ネットワーク
+│   ├── aprox19/         19 核種ネットワーク
+│   └── aprox21/         21 核種ネットワーク
+└── nse/nse_solver.h     汎用ネットワーク制約 Timmes NSE ソルバー
 ```
 
 実装と保守の詳細は [`src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md`](src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md) を参照してください。
@@ -53,6 +59,8 @@ RHS、完全 Jacobian、および Backward-Euler LHS のすべての直接 Fortr
 
 NSE bypass を無効にした 3 ステップ燃焼について、OpenMP 1 スレッドと 16 スレッドも比較しました。ステップ 0--3 の各 20 個の HDF5 データセットはすべてビット単位で一致し、新しい Ne20 の生成によりネットワーク・ODE・LU 経路が実行されたことを確認しました。
 
+汎用 NSE ソルバーは 8 つの熱力学状態で Timmes の元 47 核種プログラムと核種ごとに比較し、単一核種の質量分率の最大絶対誤差は `4.897193761622e-13` でした（その状態の合計 L1 誤差は `1.363608769782e-12`）。4 ネットワーク 48 状態はすべて収束し、`aprox19`/`aprox21` の追加 168 可変 `Ye` 状態では電荷保存残差の最大値が `6.98e-13`、実 Helmholtz EOS のエネルギー閉包相対誤差が `7.57e-14` でした。
+
 Helmholtz EOS、`BE_NR`、DenseLU、RK3、HLLC、PPM を用いた CellularDet の 1 ステップ・スモークテストが完了し、二つの大規模ネットワークで正しい核種数が表示されました。
 
 - `aprox19`：`Species Count: 19`
@@ -68,13 +76,14 @@ Helmholtz EOS、`BE_NR`、DenseLU、RK3、HLLC、PPM を用いた CellularDet �
 - 元の表形式反応率モードは含まず、解析的反応率経路を使用します。
 - OpenMP と MPI はプロセスローカルで再入可能な同じネットワーク関数を使用します。MPI の領域分割はホストアプリケーションの責任です。
 - CUDA デバイス修飾とクロスアーキテクチャ検証は現在 `aprox13` を対象とします。`iso7`、`aprox19`、`aprox21` の CUDA デバイス検証完了はまだ主張しません。
+- NSE は選択した小規模ネットワークに含まれる核種に制約されます。`iso7` と `aprox13` は `Z/A = 0.5` の核種だけを含むため、この制約付き平衡は `Ye = 0.5` でのみ存在し、完全な 47 核種 NSE 集合の代替にはなりません。
 - 本リポジトリには修正済みネットワークモジュールを保存します。ビルドシステム、OpenMP スケジューリング、ODE、EOS、ディスパッチの変更は下記の ARCH 統合リビジョンにあります。
 
 ## 由来と引用
 
 反応率および RHS の式は、F. X. Timmes による `public_iso7.f90`、`public_aprox13.f90`、`public_aprox19.f90`、`public_aprox21.f90` から直接移植しました。公式配布ページは [Cococubed: Nuclear Reaction Networks](https://cococubed.com/code_pages/burn.shtml) です。これらの式は `pynucastro` から生成したものではありません。
 
-C++ のホストインターフェースは [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH) 向けに開発されました。検証済みの統合ソースは ARCH コミット [`f637597`](https://github.com/Shiro-Akane/ARCH/commit/f63759752c2d0c0d8332cd109febb88a6843b7d9) です。
+C++ のホストインターフェースは [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH) 向けに開発されました。検証済みの統合ソースは ARCH コミット [`23cfe9d`](https://github.com/Shiro-Akane/ARCH/commit/23cfe9d999f57043d54544973b999ac3c774ab73) です。
 
 科学研究で本ネットワーク手法を使用する際は、次の論文を引用してください。
 

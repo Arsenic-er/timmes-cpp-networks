@@ -6,8 +6,8 @@ This document records the verification scope of this source snapshot. It is not 
 
 - Host: JAIST Linux CPU/GPU server
 - Host application: ARCH with HDF5 and Helmholtz EOS
-- Integrated revision: [`Shiro-Akane/ARCH@f637597`](https://github.com/Shiro-Akane/ARCH/commit/f63759752c2d0c0d8332cd109febb88a6843b7d9)
-- Reference source: supplied Timmes `public_iso7.f90`, `public_aprox13.f90`, `public_aprox19.f90`, and `public_aprox21.f90`
+- Integrated revision: [`Shiro-Akane/ARCH@23cfe9d`](https://github.com/Shiro-Akane/ARCH/commit/23cfe9d999f57043d54544973b999ac3c774ab73)
+- Reference source: supplied Timmes `public_iso7.f90`, `public_aprox13.f90`, `public_aprox19.f90`, `public_aprox21.f90`, and `public_nse.tbz`
 - Thermodynamic states: `T = 1e9, 2e9, 5e9 K`; `rho = 1e6, 1e8 g cm^-3`
 
 ## Species registry
@@ -45,6 +45,22 @@ J(T,T) = (d enuc / dT) / cv
 ```
 
 The species temperature column and nuclear-energy temperature row use analytic reaction-rate derivatives; no temperature finite difference is used. Matching the original Timmes Jacobian, the implementation does not add quotient-rule derivatives of `cv` to the ODE Jacobian.
+
+## Generic online NSE
+
+`src/physics/nse/nse_solver.h` implements the Timmes Saha equilibrium equations as `NSESolver<NetType>`. The solver reads `NUM_SPECIES`, `AION`, `ZION`, total binding energies, and statistical weights from the selected network; no isotope count or 47-species data table is hard-coded in the algorithm.
+
+The validation covered:
+
+- eight direct comparisons with the original 47-species Timmes program over `T = 2.5e9--1e10 K`, `rho = 1e6--1e9 g cm^-3`, and `Ye = 0.47--0.55`;
+- 48 fixed-state solves across all four translated networks;
+- 84 variable-`Ye` states for each of `aprox19` and `aprox21` over `Ye = 0.40--0.60`;
+- an `aprox19` projection coupled to the real Helmholtz EOS at `rho = 4.322e7 g cm^-3`, `T_old = 4.67e9 K`;
+- a 64 x 16 high-temperature CellularDet step at one and sixteen OpenMP threads.
+
+The worst single-species absolute mass-fraction difference from the original 47-species program was `4.897193761622e-13`. The aggregate L1 difference in that state was `1.363608769782e-12`; this aggregate must not be misreported as a sub-`1e-12` quantity. The worst variable-`Ye` mass and charge residuals were `6.49e-16` and `6.98e-13`, respectively. The real-EOS relative energy-closure residual was `7.5678598227e-14`. All 26 datasets from the one- and sixteen-thread CellularDet outputs were bitwise identical.
+
+This is network-constrained NSE. `iso7` and `aprox13` contain only `Z/A = 0.5` nuclei and therefore admit the restricted equilibrium only at `Ye = 0.5`. They must not be treated as replacements for the full 47-species equilibrium set.
 
 ## OpenMP determinism
 

@@ -12,6 +12,8 @@ The aprox-series nuclear-physics implementation is self-contained and does not r
 
 > **Status:** private research snapshot. No open-source license is granted by this repository at this time; see [NOTICE.md](NOTICE.md).
 
+Developed by **Arsenic-er** and **Shiro-Akane**. Supervised by **Shiro-Akane**.
+
 ## Included networks
 
 | Network | Species | Registered nuclei/particles |
@@ -23,15 +25,19 @@ The aprox-series nuclear-physics implementation is self-contained and does not r
 
 The implementation includes analytic reaction-rate expressions, Timmes screening, nuclear masses and binding energies, RHS assembly, frozen-screening composition Jacobians, and the exact analytic Timmes temperature row and column. Each `.inc` file is C++ included by its matching network header; it is not an external binary or generated runtime dependency.
 
+The snapshot also includes `NSESolver<NetType>`, a generic online Saha NSE solver translated from Timmes `public_nse`. It obtains the species count and nuclear data from each network at compile time, so the solver contains no fixed 7-, 13-, 19-, 21-, or 47-species table.
+
 ## Repository layout
 
 ```text
-src/physics/network/
-├── timmes_common/   shared constants, screening, rate assembly and AD support
-├── iso7/            7-species network
-├── aprox13/         13-species alpha-chain network
-├── aprox19/         19-species network
-└── aprox21/         21-species network
+src/physics/
+├── network/
+│   ├── timmes_common/   shared constants, screening, rate assembly and AD support
+│   ├── iso7/            7-species network
+│   ├── aprox13/         13-species alpha-chain network
+│   ├── aprox19/         19-species network
+│   └── aprox21/         21-species network
+└── nse/nse_solver.h          generic network-constrained Timmes NSE solver
 ```
 
 The detailed implementation and maintenance notes are in [`src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md`](src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md).
@@ -53,6 +59,8 @@ All direct RHS, full Jacobian and backward-Euler LHS comparisons are below the r
 
 A three-step burning run with NSE bypass disabled was also compared at 1 and 16 OpenMP threads. All 20 HDF5 datasets were bitwise identical at output steps 0--3, and newly produced Ne20 confirmed that the network/ODE/LU path was exercised.
 
+The generic NSE solver was compared species by species with the original 47-species Timmes program over eight thermodynamic states. The worst single-species absolute mass-fraction difference was `4.897193761622e-13` (the aggregate L1 difference for that state was `1.363608769782e-12`). All 48 four-network fixed-state cases converged, and the worst charge-conservation residual in 168 additional `aprox19`/`aprox21` variable-`Ye` cases was `6.98e-13`. A real Helmholtz EOS coupling test closed energy to `7.57e-14` relative error.
+
 CellularDet one-step smoke runs with Helmholtz EOS, `BE_NR`, DenseLU, RK3, HLLC and PPM completed for both larger networks and reported the correct values:
 
 - `aprox19`: `Species Count: 19`
@@ -68,13 +76,14 @@ More detail is available in [docs/VALIDATION.md](docs/VALIDATION.md).
 - The original tabulated-rate mode is not included; this port uses the analytic-rate path.
 - OpenMP and MPI use the same process-local, re-entrant network functions. MPI domain decomposition remains the host application's responsibility.
 - CUDA device qualification and cross-architecture validation currently cover `aprox13`; `iso7`, `aprox19`, and `aprox21` are not yet claimed as device-verified CUDA networks.
+- NSE is constrained to the nuclei present in the selected small network. In particular, `iso7` and `aprox13` have only `Z/A = 0.5` nuclei and therefore admit this restricted equilibrium only at `Ye = 0.5`; this is not a replacement for a full 47-species NSE set.
 - This repository preserves the repaired network module. Build-system, OpenMP scheduling, ODE, EOS and dispatch changes remain in the linked ARCH integration revision.
 
 ## Provenance and citation
 
 The rate and RHS expressions were translated directly from the supplied `public_iso7.f90`, `public_aprox13.f90`, `public_aprox19.f90`, and `public_aprox21.f90` sources by F. X. Timmes. The official source page is [Cococubed: Nuclear Reaction Networks](https://cococubed.com/code_pages/burn.shtml). These equations are not generated from `pynucastro`.
 
-The C++ host interfaces were developed for [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH). The validated integrated source is ARCH commit [`f637597`](https://github.com/Shiro-Akane/ARCH/commit/f63759752c2d0c0d8332cd109febb88a6843b7d9).
+The C++ host interfaces were developed for [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH). The validated integrated source is ARCH commit [`23cfe9d`](https://github.com/Shiro-Akane/ARCH/commit/23cfe9d999f57043d54544973b999ac3c774ab73).
 
 When using the network method scientifically, cite:
 

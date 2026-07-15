@@ -12,6 +12,8 @@ aprox 系列的核物理实现自包含，不依赖外部网络生成或运行�
 
 > **状态：** 私有研究快照。本仓库目前不授予开源许可证，详情请见 [NOTICE.md](NOTICE.md)。
 
+开发者：**Arsenic-er**、**Shiro-Akane**。指导者：**Shiro-Akane**。
+
 ## 包含的网络
 
 | 网络 | 核素数 | 注册的原子核/粒子 |
@@ -23,15 +25,19 @@ aprox 系列的核物理实现自包含，不依赖外部网络生成或运行�
 
 实现内容包括解析反应率公式、Timmes 屏蔽修正、原子核质量与结合能、RHS 组装、frozen-screening 组分雅可比，以及原 Timmes 解析温度行和温度列。每个 `.inc` 文件都是由对应网络头文件包含的 C++ 源码片段，不是外部二进制文件，也不是运行时生成的依赖。
 
+本快照还包含从 Timmes `public_nse` 转译的泛型在线 Saha NSE 求解器 `NSESolver<NetType>`。它在编译期从网络读取核素数和核数据，没有硬编码 7、13、19、21 或 47 核素数组。
+
 ## 仓库结构
 
 ```text
-src/physics/network/
-├── timmes_common/   共享常数、屏蔽、反应率组装和自动微分支持
-├── iso7/            7 核素网络
-├── aprox13/         13 核素 α 链网络
-├── aprox19/         19 核素网络
-└── aprox21/         21 核素网络
+src/physics/
+├── network/
+│   ├── timmes_common/   共享常数、屏蔽、反应率组装和自动微分支持
+│   ├── iso7/            7 核素网络
+│   ├── aprox13/         13 核素 α 链网络
+│   ├── aprox19/         19 核素网络
+│   └── aprox21/         21 核素网络
+└── nse/nse_solver.h     泛型网络受限 Timmes NSE 求解器
 ```
 
 详细实现和维护说明见 [`src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md`](src/physics/network/TIMMES_NETWORKS_TECHNICAL_NOTE.zh-CN.md)。
@@ -53,6 +59,8 @@ RHS、完整 Jacobian 和 Backward-Euler LHS 的所有直接 Fortran 对照均�
 
 关闭 NSE bypass 后还进行了 3 步实际燃烧的 1/16 OpenMP 线程对照。步骤 0--3 的每份输出均有 20 个 HDF5 数据集且全部逐位一致；测试中生成了新的 Ne20，确认实际经过网络、ODE 和 LU 路径。
 
+泛型 NSE 求解器在 8 个热力学状态下与 Timmes 原 47 核素程序逐核素对照，最坏单核素质量分数绝对误差为 `4.897193761622e-13`（该状态汇总 L1 误差为 `1.363608769782e-12`）。四网络 48 个固定状态全部收敛；`aprox19`/`aprox21` 额外 168 个可变 `Ye` 状态的最坏电荷守恒残差为 `6.98e-13`，真实 Helmholtz EOS 能量闭合相对误差为 `7.57e-14`。
+
 使用 Helmholtz EOS、`BE_NR`、DenseLU、RK3、HLLC 和 PPM 的 CellularDet 单步冒烟测试均已完成，两个较大网络报告了正确的核素数：
 
 - `aprox19`：`Species Count: 19`
@@ -68,13 +76,14 @@ RHS、完整 Jacobian 和 Backward-Euler LHS 的所有直接 Fortran 对照均�
 - 本移植使用解析反应率路径，未包含原始的反应率查表模式。
 - OpenMP 和 MPI 共用进程局部、可重入的网络函数；MPI 区域分解由宿主程序负责。
 - CUDA 设备标注和跨架构验证当前覆盖 `aprox13`；暂不宣称 `iso7`、`aprox19`、`aprox21` 已完成 CUDA 设备验证。
+- NSE 只在所选小网络的核素集上求平衡。`iso7` 和 `aprox13` 仅含 `Z/A = 0.5` 核素，因此这种受限平衡只在 `Ye = 0.5` 时存在；它不能替代完整 47 核素 NSE 集。
 - 本仓库保存修复后的网络模块；构建系统、OpenMP 调度、ODE、EOS 和网络分发的改动保留在下方链接的 ARCH 集成版本中。
 
 ## 来源与引用
 
 反应率和 RHS 表达式直接翻译自 F. X. Timmes 的 `public_iso7.f90`、`public_aprox13.f90`、`public_aprox19.f90` 和 `public_aprox21.f90`。原始代码页面为 [Cococubed：Nuclear Reaction Networks](https://cococubed.com/code_pages/burn.shtml)。这些方程并非由 `pynucastro` 生成。
 
-C++ 宿主接口面向 [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH) 开发。已经验证的完整集成源码位于 ARCH 提交 [`f637597`](https://github.com/Shiro-Akane/ARCH/commit/f63759752c2d0c0d8332cd109febb88a6843b7d9)。
+C++ 宿主接口面向 [Shiro-Akane/ARCH](https://github.com/Shiro-Akane/ARCH) 开发。已经验证的完整集成源码位于 ARCH 提交 [`23cfe9d`](https://github.com/Shiro-Akane/ARCH/commit/23cfe9d999f57043d54544973b999ac3c774ab73)。
 
 在科研工作中使用该网络方法时，请引用：
 
