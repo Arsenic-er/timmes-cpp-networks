@@ -1,0 +1,93 @@
+name: Bug report
+description: Report a build, numerical, conservation, or parallel-execution problem.
+title: '[Bug]: '
+body:
+- type: dropdown
+  id: component
+  attributes:
+    label: Affected component
+    options:
+    - Build or integration
+    - Reaction rates or RHS
+    - Jacobian
+    - ODE solver
+    - NSE
+    - OpenMP or MPI
+    - CUDA aprox13
+    - Documentation
+    - Other / unsure
+  validations:
+    required: true
+- type: input
+  id: version
+  attributes:
+    label: Version or commit SHA
+  validations:
+    required: true
+- type: textarea
+  id: summary
+  attributes:
+    label: What happened?
+    placeholder: 'Example: A fixed-state calculation differs between serial and OpenMP
+      builds beyond the declared tolerance.'
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: Steps to reproduce
+    placeholder: '1. Select the network and record density, temperature, and composition.
+
+      2. Use the same solver settings in serial and OpenMP builds.
+
+      3. Compare species outputs and conservation residuals.'
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: Expected behavior
+    placeholder: The comparison should satisfy the declared reference and conservation
+      tolerances.
+  validations:
+    required: true
+- type: textarea
+  id: context
+  attributes:
+    label: Numerical reproduction inputs
+    placeholder: 'Network: iso7, aprox13, aprox19, or aprox21
+
+      Density and units:
+
+      Temperature and units:
+
+      Composition and ordering:
+
+      Electron fraction (if applicable):
+
+      Time step and solver tolerances:
+
+      Reference result and absolute / relative difference:
+
+      Conservation residuals (if relevant):'
+- type: textarea
+  id: environment
+  attributes:
+    label: Environment
+    placeholder: 'Operating system:
+
+      Compiler and build flags:
+
+      CPU and thread count:
+
+      MPI implementation and rank count (if applicable):
+
+      GPU and CUDA version (if applicable):'
+  validations:
+    required: true
+- type: textarea
+  id: evidence
+  attributes:
+    label: Logs, screenshots, or a minimal example
+    description: Include the smallest example or log excerpt needed to reproduce the
+      problem.

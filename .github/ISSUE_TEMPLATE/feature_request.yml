@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest an improvement to timmes-cpp-networks.
+title: '[Feature]: '
+body:
+- type: dropdown
+  id: component
+  attributes:
+    label: Affected component
+    options:
+    - Build or integration
+    - Reaction rates or RHS
+    - Jacobian
+    - ODE solver
+    - NSE
+    - OpenMP or MPI
+    - CUDA aprox13
+    - Documentation
+    - Other / unsure
+  validations:
+    required: true
+- type: textarea
+  id: problem
+  attributes:
+    label: Problem or use case
+    placeholder: 'Example: I need to measure an optimization without changing the
+      numerical acceptance criteria.'
+  validations:
+    required: true
+- type: textarea
+  id: proposal
+  attributes:
+    label: Proposed solution
+    placeholder: 'Example: Add a fixed-state CPU and OpenMP benchmark using the existing
+      reference cases.'
+  validations:
+    required: true
+- type: textarea
+  id: alternatives
+  attributes:
+    label: Alternatives considered
+    description: Describe other approaches or current workarounds, if any.
+- type: textarea
+  id: acceptance
+  attributes:
+    label: Acceptance criteria
+    placeholder: 'Reference inputs, units, tolerances, and compiler flags are recorded.
+
+      Numerical and conservation gates remain unchanged.
+
+      Timing results identify hardware, thread count, and measurement method.'
+- type: textarea
+  id: context
+  attributes:
+    label: Additional context
+    description: Add related issues, small examples, design sketches, or references
+      if useful.
